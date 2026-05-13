@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function ownsRestaurant() {
+      return signedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    match /users/{uid} {
+      allow create, read, update, delete: if ownsUser(uid);
+
+      match /favorites/{restaurantId} {
+        allow read, create, delete: if ownsUser(uid);
+        allow update: if false;
+      }
+    }
+
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow create: if ownsRestaurant();
+      allow update, delete: if signedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    match /partnerRequests/{requestId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == "pending";
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    match /restaurantPhotos/{photoId} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.restaurantId is string
+        && request.resource.data.url is string;
+      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+  }
+}
